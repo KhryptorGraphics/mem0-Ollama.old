@@ -84,7 +84,9 @@ def check_ollama() -> bool:
 def chat_with_ollama(
     messages: List[Dict[str, str]], 
     model: str = OLLAMA_MODEL,
-    output_format: Optional[Union[str, Dict]] = None
+    output_format: Optional[Union[str, Dict]] = None,
+    temperature: float = 0.7,
+    max_tokens: int = 2000
 ) -> Dict[str, Any]:
     """
     Send a chat request to Ollama's API.
@@ -93,6 +95,8 @@ def chat_with_ollama(
         messages: List of message objects (role, content)
         model: Model to use for chat
         output_format: Optional format for structured output
+        temperature: Controls randomness (0.0 to 1.0)
+        max_tokens: Maximum number of tokens to generate in the response
     
     Returns:
         Dict with the Ollama API response
@@ -102,7 +106,8 @@ def chat_with_ollama(
         "model": model,
         "stream": False,
         "options": {
-            "temperature": 0.7
+            "temperature": float(temperature),  # Ensure it's a float
+            "num_predict": int(max_tokens)      # Ollama's parameter for max tokens
         },
         "messages": messages
     }

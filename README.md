@@ -1,99 +1,123 @@
-# mem0-Ollama Integration
+# mem0 + Ollama Integration
 
-This repository contains an integration between [mem0](https://mem0.ai) (the memory layer for AI), [Ollama](https://ollama.ai) (local LLM runtime), and [Qdrant](https://qdrant.tech) (vector database) for building AI applications with long-term memory.
+This project demonstrates the integration of [mem0](https://github.com/mem0ai/mem0) with [Ollama](https://ollama.ai/) and [Qdrant](https://qdrant.tech/) to create a chat application with persistent memory capabilities.
 
 ## Features
 
-- Web-based chat interface with memory capabilities
-- Integration with Ollama models for local LLM inference
-- Persistent memory storage using Qdrant vector database
-- Multiple memory modes: search, user, session, none
-- Support for structured output formats
-- Easy setup with provided scripts
+- Web-based chat interface
+- Integration with Ollama for LLM inference
+- Persistent memory using Qdrant vector database
+- Structured output formats for sentiment analysis, summaries, etc.
+- Multiple memory modes (search, user, session)
 
-## Quick Start
+## Project Structure
 
-1. **Prerequisites**
-   - [Docker](https://www.docker.com/products/docker-desktop/) for running Qdrant
-   - [Ollama](https://ollama.ai/) for running LLMs locally
-   - Python 3.9+ with pip
+The project is organized into modular components:
 
-2. **Automated Setup**
-   - On Windows:
-     ```powershell
-     .\setup-mem0-integration.ps1
-     ```
-   - On macOS/Linux:
-     ```bash
-     ./setup-mem0-integration.sh
-     ```
+- `main.py` - Entry point for the application
+- `config.py` - Configuration settings and constants
+- `templates.py` - HTML and frontend code
+- `ollama_client.py` - Functions for interacting with Ollama API
+- `memory_utils.py` - Memory management functionality
+- `api.py` - Flask API server with routes
 
-3. **Start the Web Interface**
-   ```bash
-   python main.py
+## Requirements
+
+- Python 3.8+
+- Ollama running locally (or on a remote server)
+- Qdrant running locally (or on a remote server)
+- mem0 Python package
+- Flask
+
+## Installation
+
+1. Clone this repository
+
+2. Install required packages:
+   ```
+   pip install mem0ai flask requests
    ```
 
-4. **Open the Web Interface**
-   - Navigate to [http://localhost:8000](http://localhost:8000) in your browser
+3. Ensure Ollama is running and has the required models:
+   ```
+   # Start Ollama (default: localhost:11434)
+   ollama serve
 
-## Manual Setup
-
-If you prefer to set up the components manually:
-
-1. **Start Qdrant in Docker**
-   ```bash
-   docker run -d --name qdrant-mem0 -p 6333:6333 -p 6334:6334 qdrant/qdrant
+   # Pull required models
+   ollama pull llama3
+   ollama pull nomic-embed-text  # optional, for better embeddings
    ```
 
-2. **Install mem0**
-   ```bash
-   pip install mem0ai
+4. Ensure Qdrant is running:
+   ```
+   # Using Docker (recommended)
+   docker run -d -p 6333:6333 -p 6334:6334 -v $(pwd)/qdrant_data:/qdrant/storage qdrant/qdrant
    ```
 
-3. **Set Up Ollama**
-   - Make sure Ollama is running
-   - Pull a model:
-     ```bash
-     ollama pull llama3
-     ```
+## Usage
 
-4. **Start the Server**
-   ```bash
-   python main.py
-   ```
+Run the application:
 
-## Configuration
+```
+python main.py
+```
 
-Edit `config.py` to change default settings:
+Customize with command-line options:
 
-- `OLLAMA_HOST`: URL for Ollama API (default: "http://localhost:11434")
-- `OLLAMA_MODEL`: Default model to use (default: "llama3")
-- `QDRANT_HOST`: URL for Qdrant (default: "http://localhost:6333")
-- `QDRANT_COLLECTION`: Collection name for memories (default: "ollama_memories")
-- `API_PORT`: Port for web interface (default: 8000)
+```
+python main.py --help
+usage: main.py [-h] [--ollama-host OLLAMA_HOST] [--ollama-model OLLAMA_MODEL]
+               [--qdrant-host QDRANT_HOST] [--embed-model EMBED_MODEL]
+               [--port PORT] [--debug]
 
-## Files
+Start the mem0 + Ollama integration server
 
-- `main.py`: Main entry point for the web interface
-- `api.py`: API server implementation
-- `memory_utils.py`: Memory management utilities
-- `ollama_client.py`: Ollama API client
-- `templates.py`: HTML templates for web interface
-- `config.py`: Configuration settings
-- `docker-compose.yml`: Docker configuration for Qdrant
-- `setup-mem0-integration.ps1`: Windows setup script
-- `setup-mem0-integration.sh`: Unix setup script
+optional arguments:
+  -h, --help            show this help message and exit
+  --ollama-host OLLAMA_HOST
+                        Ollama API host (default: http://localhost:11434)
+  --ollama-model OLLAMA_MODEL
+                        Ollama model to use (default: llama3)
+  --qdrant-host QDRANT_HOST
+                        Qdrant host (default: http://localhost:6333)
+  --embed-model EMBED_MODEL
+                        Model to use for embeddings (defaults to ollama-model if not specified)
+  --port PORT           Port for the API server (default: 8000)
+  --debug               Run in debug mode
+```
 
-## Advanced Usage
+## Web Interface
 
-For more advanced usage, including API usage and direct examples, see [README-advanced.md](README-advanced.md).
+Once running, open your browser to http://localhost:8000 to access the chat interface.
+
+The interface provides:
+- Model selection
+- Output format selection
+- Memory mode selection
+- Memory clearing functionality
+
+## API Endpoints
+
+- `GET /` - Web interface
+- `GET /api/models` - Get available models
+- `POST /api/chat` - Send chat message
+- `GET /api/memories` - Retrieve memories for a user
+- `DELETE /api/memories` - Clear memories for a user
 
 ## Memory Modes
 
-- **Search**: Retrieves memories relevant to the current message
-- **User**: Retrieves all memories for the current user
-- **Session**: Maintains memories for the current conversation session
-- **None**: Disables memory functionality
+- **Search**: Retrieve relevant memories based on the current query
+- **User**: Show all memories for the current user
+- **Session**: Use only memories from the current session
+- **None**: Disable memory functionality
+
+## Output Formats
+
+- **None**: Standard text output
+- **JSON**: Format response as JSON
+- **Sentiment**: Analyze sentiment with confidence
+- **Summary**: Generate a concise summary with key points
+- **Action Items**: Extract action items with priority levels
 
 ## License
 

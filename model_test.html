@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Model Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        select {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4a6fa5;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Ollama Model Test</h1>
+    
+    <h2>Direct API Response</h2>
+    <button id="directTestBtn">Test Direct API Call</button>
+    <pre id="directResult">Click button to test...</pre>
+    
+    <h2>Model Selection</h2>
+    <select id="modelSelect">
+        <option value="">Loading models...</option>
+    </select>
+    
+    <h2>Debug Output</h2>
+    <pre id="debugOutput"></pre>
+    
+    <script>
+        // Debug logger
+        function log(message) {
+            const debugOutput = document.getElementById('debugOutput');
+            const timestamp = new Date().toLocaleTimeString();
+            debugOutput.textContent += `[${timestamp}] ${message}\n`;
+            console.log(`[${timestamp}] ${message}`);
+        }
+        
+        // Direct API test
+        document.getElementById('directTestBtn').addEventListener('click', async () => {
+            const resultElement = document.getElementById('directResult');
+            resultElement.textContent = 'Testing...';
+            
+            try {
+                log('Making direct API call to /api/models');
+                const response = await fetch('/api/models');
+                log(`API response status: ${response.status}`);
+                
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                log(`Received ${data.models ? data.models.length : 0} models from API`);
+                
+                // Display the raw API response
+                resultElement.textContent = JSON.stringify(data, null, 2);
+                
+                // Update the select dropdown
+                populateModelSelect(data.models || []);
+            } catch (error) {
+                log(`Error: ${error.message}`);
+                resultElement.textContent = `Error: ${error.message}`;
+            }
+        });
+        
+        // Populate model select
+        function populateModelSelect(models) {
+            const select = document.getElementById('modelSelect');
+            select.innerHTML = '';
+            
+            if (models.length === 0) {
+                log('No models available - adding a default option');
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No models available';
+                select.appendChild(option);
+                return;
+            }
+            
+            log(`Adding ${models.length} models to select dropdown`);
+            models.forEach(model => {
+                try {
+                    const option = document.createElement('option');
+                    const name = model.name || model.id || 'Unknown model';
+                    const size = model.parameter_size || 'unknown size';
+                    
+                    option.value = name;
+                    option.textContent = `${name} (${size})`;
+                    
+                    select.appendChild(option);
+                    log(`Added model: ${name}`);
+                } catch (e) {
+                    log(`Error adding model: ${e.message}`);
+                }
+            });
+        }
+        
+        // Initial load of models
+        async function loadModels() {
+            log('Initial model loading...');
+            try {
+                const response = await fetch('/api/models');
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`Successfully loaded ${data.models ? data.models.length : 0} models`);
+                    populateModelSelect(data.models || []);
+                } else {
+                    log(`Failed to load models: ${response.status}`);
+                }
+            } catch (error) {
+                log(`Error loading models: ${error.message}`);
+            }
+        }
+        
+        // Initialize
+        loadModels();
+    </script>
+</body>
+</html>

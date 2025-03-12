@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Direct Ollama API Test</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px;
+        }
+        #modelSelect {
+            width: 100%;
+            padding: 8px;
+            margin: 10px 0;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        button {
+            padding: 8px 16px;
+            background: #4a90e2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Direct Ollama API Test</h1>
+    
+    <h2>JSON Response</h2>
+    <pre id="jsonOutput">Loading...</pre>
+    
+    <h2>Model Selection</h2>
+    <select id="modelSelect"><option value="">Loading models...</option></select>
+    
+    <button id="reloadBtn">Reload Models</button>
+    <button id="directFetchBtn">Direct Fetch (localhost:11434)</button>
+    
+    <h2>Debug Log</h2>
+    <pre id="debugLog"></pre>
+    
+    <script>
+        // Utility for logging
+        function log(message) {
+            const debugLog = document.getElementById('debugLog');
+            const timestamp = new Date().toLocaleTimeString();
+            debugLog.textContent += `[${timestamp}] ${message}\n`;
+            console.log(`[${timestamp}] ${message}`);
+        }
+        
+        // Set JSON output
+        function setJsonOutput(data, isError = false) {
+            const jsonOutput = document.getElementById('jsonOutput');
+            jsonOutput.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+            if (isError) {
+                jsonOutput.classList.add('error');
+            } else {
+                jsonOutput.classList.remove('error');
+            }
+        }
+        
+        // Populate model select
+        function populateModelSelect(models) {
+            const select = document.getElementById('modelSelect');
+            select.innerHTML = '';
+            
+            if (!models || models.length === 0) {
+                const option = document.createElement('option');
+                option.textContent = 'No models found';
+                select.appendChild(option);
+                return;
+            }
+            
+            models.forEach(model => {
+                const option = document.createElement('option');
+                const name = model.name || model.id || 'unknown';
+                
+                option.value = name;
+                option.textContent = name;
+                
+                select.appendChild(option);
+                log(`Added model: ${name}`);
+            });
+        }
+        
+        // Fetch models from API
+        async function fetchModels() {
+            try {
+                log('Fetching models from API endpoint...');
+                setJsonOutput('Fetching...');
+                
+                const response = await fetch('/api/models');
+                log(`Response status: ${response.status}`);
+                
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                log(`Received data with ${data.models ? data.models.length : 0} models`);
+                
+                // Show raw JSON
+                setJsonOutput(data);
+                
+                // Populate select
+                populateModelSelect(data.models);
+                
+            } catch (error) {
+                log(`Error: ${error.message}`);
+                setJsonOutput(`Error: ${error.message}`, true);
+            }
+        }
+        
+        // Direct fetch from Ollama
+        async function directFetch() {
+            try {
+                log('Directly fetching from Ollama API...');
+                setJsonOutput('Fetching from Ollama directly...');
+                
+                const response = await fetch('http://localhost:11434/api/tags');
+                log(`Direct response status: ${response.status}`);
+                
+                if (!response.ok) {
+                    throw new Error(`Ollama API error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                log(`Received direct data with ${data.models ? data.models.length : 0} models`);
+                
+                // Show raw JSON
+                setJsonOutput(data);
+                
+                // Populate select with direct models
+                if (data.models) {
+                    const formattedModels = data.models.map(model => ({
+                        name: model.name,
+                        id: model.name
+                    }));
+                    populateModelSelect(formattedModels);
+                }
+                
+            } catch (error) {
+                log(`Direct fetch error: ${error.message}`);
+                setJsonOutput(`Direct error: ${error.message}`, true);
+            }
+        }
+        
+        // Event listeners
+        document.getElementById('reloadBtn').addEventListener('click', fetchModels);
+        document.getElementById('directFetchBtn').addEventListener('click', directFetch);
+        
+        // Initial fetch
+        fetchModels();
+    </script>
+</body>
+</html>

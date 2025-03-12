@@ -284,22 +284,45 @@ INDEX_HTML = """
                     </select>
                 </div>
                 
+                <div class="generation-controls">
+                    <h3>Generation Settings</h3>
+                    <div class="control-item">
+                        <label for="temperatureSlider">Temperature: <span id="temperatureValue">0.7</span></label>
+                        <input type="range" id="temperatureSlider" min="0.1" max="1.0" step="0.1" value="0.7">
+                        <small style="display: block; margin-top: 5px; color: #666;">Lower values = more focused, higher = more creative</small>
+                    </div>
+                    
+                    <div class="control-item" style="margin-top: 10px;">
+                        <label for="maxTokensInput">Max Tokens: <span id="maxTokensValue">2000</span></label>
+                        <input type="number" id="maxTokensInput" min="10" max="32000" step="10" value="2000">
+                        <small style="display: block; margin-top: 5px; color: #666;">Maximum length of generated response</small>
+                    </div>
+                </div>
+                
                 <div class="memory-controls">
                     <h3>Memory Settings</h3>
-                    <label for="modeSelect">Memory Mode:</label>
-                    <select id="modeSelect">
-                        <option value="search">Search</option>
-                        <option value="user">User</option>
-                        <option value="session">Session</option>
-                        <option value="none">None</option>
-                    </select>
-                    
-                    <div style="margin-top: 1rem;">
-                        <button type="button" id="clearMemoriesBtn" class="secondary-btn">Clear Memories</button>
+                    <div>
+                        <p>Memory is always enabled with semantic search</p>
+                        <button type="button" id="clearMemoriesBtn" style="margin-top: 10px;">Clear All Memories</button>
                     </div>
                 </div>
                 
                 <div>
+                    <h3>Memory Stats</h3>
+                    <div class="memory-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">Active Memories:</span>
+                            <span id="activeMemoryCounter" class="stat-value">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Inactive Memories:</span>
+                            <span id="inactiveMemoryCounter" class="stat-value">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Total Memories:</span>
+                            <span id="totalMemoryCounter" class="stat-value">0</span>
+                        </div>
+                    </div>
                     <h3>Recent Memories</h3>
                     <div class="memories-container" id="memoriesContainer">
                         <div class="memory-item">No memories yet.</div>
@@ -312,7 +335,7 @@ INDEX_HTML = """
     <script>
         // Global state
         let conversationId = null;
-        let userId = `web_user_${Date.now().toString(36)}`;
+        const globalMemoryId = "global_memory_store";  // Match the GLOBAL_MEMORY_ID from memory_utils.py
         
         // DOM elements
         const chatMessages = document.getElementById('chatMessages');
@@ -321,7 +344,6 @@ INDEX_HTML = """
         const sendButton = document.getElementById('sendButton');
         const modelInput = document.getElementById('modelInput');
         const formatSelect = document.getElementById('formatSelect');
-        const modeSelect = document.getElementById('modeSelect');
         const clearMemoriesBtn = document.getElementById('clearMemoriesBtn');
         const memoriesContainer = document.getElementById('memoriesContainer');
         
@@ -435,6 +457,12 @@ INDEX_HTML = """
                 const modelName = modelInput.value.trim() || 'llama3'; // Default to llama3 if empty
                 addSystemMessage(`Sending message to model: ${modelName}...`);
                 
+                // Get temperature and max_tokens values from UI
+                const temperatureSlider = document.getElementById('temperatureSlider');
+                const maxTokensInput = document.getElementById('maxTokensInput');
+                const temperature = parseFloat(temperatureSlider.value);
+                const maxTokens = parseInt(maxTokensInput.value);
+                
                 const payload = {
                     messages: [
                         { role: 'user', content }
@@ -442,7 +470,9 @@ INDEX_HTML = """
                     model: modelName,
                     format: formatSelect.value === 'none' ? null : formatSelect.value,
                     conversation_id: conversationId,
-                    memory_mode: modeSelect.value  // Add memory mode parameter
+                    temperature: temperature,
+                    max_tokens: maxTokens
+                    // Memory is always on, no need to specify memory_mode
                 };
                 
                 console.log("Payload:", JSON.stringify(payload, null, 2));
@@ -522,11 +552,11 @@ INDEX_HTML = """
             }
         }
         
-        // Update the memories display
+        // Update the memories display and counters
         function updateMemoriesDisplay(memories) {
             memoriesContainer.innerHTML = '';
             
-            if (memories.length === 0) {
+            if (!memories || memories.length === 0) {
                 const memoryItem = document.createElement('div');
                 memoryItem.classList.add('memory-item');
                 memoryItem.textContent = 'No memories found.';
@@ -534,42 +564,59 @@ INDEX_HTML = """
                 return;
             }
             
+            // Update memory display only
             memories.forEach(memory => {
                 const memoryItem = document.createElement('div');
                 memoryItem.classList.add('memory-item');
-                memoryItem.textContent = memory.memory || memory;
+                // Add active/inactive indicator
+                const status = memory.metadata && memory.metadata.active === false ? '(inactive) ' : '';
+                memoryItem.textContent = status + (memory.memory || memory);
                 memoriesContainer.appendChild(memoryItem);
             });
+            
+            // Always update the counter after displaying memories
+            updateMemoryCounter();
         }
         
-        // Fetch user memories
+        // Fetch memories from global store
         async function fetchMemories() {
             try {
-                const response = await fetch(`/api/memories?user_id=${userId}`);
+                const response = await fetch(`/api/memories?user_id=${globalMemoryId}`);
                 const data = await response.json();
                 
-                updateMemoriesDisplay(data.memories || []);
+                if (data.memories) {
+                    console.log(`Loaded ${data.memories.length} memories from global store`);
+                    updateMemoriesDisplay(data.memories);
+                } else {
+                    console.log("No memories found in global store");
+                    updateMemoriesDisplay([]);
+                }
             } catch (error) {
                 console.error('Error fetching memories:', error);
+                addSystemMessage("Could not load memories. Check if the server is running.");
             }
         }
         
-        // Clear user memories
+        // Clear all memories from the global store
         async function clearMemories() {
             try {
-                const response = await fetch(`/api/memories?user_id=${userId}`, {
+                addSystemMessage("Clearing all memories...");
+                
+                const response = await fetch(`/api/memories?user_id=${globalMemoryId}`, {
                     method: 'DELETE'
                 });
                 
                 if (response.ok) {
-                    addSystemMessage('All memories have been cleared.');
+                    console.log("Successfully cleared all memories");
+                    addSystemMessage('All memories have been cleared successfully.');
                     updateMemoriesDisplay([]);
                 } else {
-                    throw new Error('Failed to clear memories.');
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to clear memories.');
                 }
             } catch (error) {
                 console.error('Error clearing memories:', error);
-                addSystemMessage(`Error: ${error.message}`);
+                addSystemMessage(`Error clearing memories: ${error.message}`);
             }
         }
         
@@ -597,12 +644,95 @@ INDEX_HTML = """
         function init() {
             // No need to fetch models as we now use manual input
             fetchMemories();
-            addSystemMessage(`Memory mode: ${modeSelect.value}`);
-            addSystemMessage(`Using model: ${document.getElementById('modelInput').value}`);
+            addSystemMessage("Memory is always enabled with semantic search");
+            addSystemMessage(`Using model: ${modelInput.value || 'llama3'}`);
+            
+            // Make sure our clear memories button works correctly
+            clearMemoriesBtn.addEventListener('click', () => {
+                addSystemMessage("Clearing memories...");
+                clearMemories();
+            });
+            
+            // Setup temperature and max tokens sliders to update display values
+            const temperatureSlider = document.getElementById('temperatureSlider');
+            const temperatureValue = document.getElementById('temperatureValue');
+            const maxTokensInput = document.getElementById('maxTokensInput');
+            const maxTokensValue = document.getElementById('maxTokensValue');
+            
+            temperatureSlider.addEventListener('input', () => {
+                temperatureValue.textContent = temperatureSlider.value;
+            });
+            
+            maxTokensInput.addEventListener('input', () => {
+                maxTokensValue.textContent = maxTokensInput.value;
+            });
+        }
+        
+        // Fetch and update memory counts from the server
+        async function updateMemoryCounter() {
+            try {
+                const response = await fetch('/api/memory_count');
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Get all counter elements
+                    const activeCounter = document.getElementById('activeMemoryCounter');
+                    const inactiveCounter = document.getElementById('inactiveMemoryCounter');
+                    const totalCounter = document.getElementById('totalMemoryCounter');
+                    
+                    // Get old values for comparison
+                    const oldActive = parseInt(activeCounter.textContent);
+                    const oldInactive = parseInt(inactiveCounter.textContent);
+                    const oldTotal = parseInt(totalCounter.textContent);
+                    
+                    // Update counters with new values
+                    activeCounter.textContent = data.active.toString();
+                    inactiveCounter.textContent = data.inactive.toString();
+                    totalCounter.textContent = data.total.toString();
+                    
+                    // Apply highlight effect to counters that changed
+                    if (oldActive !== data.active) {
+                        highlightCounter(activeCounter);
+                    }
+                    
+                    if (oldInactive !== data.inactive) {
+                        highlightCounter(inactiveCounter);
+                    }
+                    
+                    if (oldTotal !== data.total) {
+                        highlightCounter(totalCounter);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching memory counts:', error);
+            }
+        }
+        
+        // Helper function to apply highlight effect to a counter
+        function highlightCounter(element) {
+            element.style.backgroundColor = '#ffd700'; // Highlight color
+            element.style.transition = 'background-color 0.5s ease';
+            
+            // Remove highlight after 1 second
+            setTimeout(() => {
+                element.style.backgroundColor = '';
+            }, 1000);
+        }
+        
+        // Set up periodic memory count updates
+        function startMemoryCountUpdates() {
+            // Update immediately
+            updateMemoryCounter();
+            
+            // Then update every 5 seconds
+            setInterval(updateMemoryCounter, 5000);
         }
         
         // Start the application
         init();
+        
+        // Start memory count updates
+        startMemoryCountUpdates();
     </script>
 </body>
 </html>
